@@ -9,6 +9,9 @@
     "email": "MathewKurian@utexas.edu",
     "url": "https://github.com/bluejamesbond"
   },
+  "scripts": {
+    "test": "node app.js"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/bluejamesbond/CharacterMap.git"
@@ -25,7 +28,7 @@
   "main": "app.js",
   "license": "MIT",
   "dependencies": {
-    "express": "4.13.4"
+    "express": "^4.18.1"
   },
   "readmeFilename": "README.md"
 }
