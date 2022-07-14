@@ -231,6 +231,103 @@ function onReadFile(e) {
     reader.readAsArrayBuffer(file);
 }
 
+function  dec2hex2 ( textString ) {
+  var hexequiv = new Array ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F");
+  return hexequiv[(textString >> 4) & 0xF] + hexequiv[textString & 0xF];
+}
+
+function convertCharStr2CP ( textString, parameters, pad, type, mixed ) {
+  // converts a string of characters to code points, separated by space
+  // textString: string, the string to convert
+  // parameters: string enum [ascii, latin1], a set of characters to not convert
+  // pad: boolean, if true, hex numbers lower than 1000 are padded with zeros
+  // type: string enum[hex, dec, unicode, 0x], whether output should be in hex or dec or unicode U+ form
+  // mixed: boolean, true if Show Latin is selected: causes space separators to be added
+  var str = ''
+  var number
+  var chars = [...textString]
+
+  chars[chars.length] = ' '
+  for (let i=0; i<chars.length-1; i++) {
+    var cp = chars[i].codePointAt(0)
+
+    if (cp <= 127 && parameters.includes('ascii')) str += chars[i]
+    else if (cp <= 255 && parameters.includes('latin1')) str += chars[i]
+    else {
+      switch (type) {
+        case 'hex': number = chars[i].codePointAt(0).toString(16).toUpperCase()
+          if (pad>0) while (number.length < pad) number = '0'+number
+          if (!mixed) str += number+' '
+          else { 
+            if (chars[i+1].codePointAt(0) > 127) str += number+' '
+            else str += number
+          }
+          break
+        case 'zerox':  number = chars[i].codePointAt(0).toString(16).toUpperCase()
+          if (pad>0) while (number.length < pad) number = '0'+number
+          str += '0x'+number
+          break
+        case 'unicode': number = chars[i].codePointAt(0).toString(16).toUpperCase()
+          if (pad>0) while (number.length < pad) number = '0'+number
+          str += 'U+'+number
+          break
+        case 'dec': number = cp
+          if (!mixed) str += number+' '
+          else { 
+            if (chars[i+1].codePointAt(0) > 127) str += number+' '
+            else str += number
+          }
+      }
+    }
+  }
+  return str.trim()
+}
+
+function convertCharStr4UTF8 ( str ) { 
+  // Converts a string of characters to UTF-8 byte codes, separated by spaces
+  // str: sequence of Unicode characters
+  var highsurrogate = 0;
+  var suppCP; // decimal code point value for a supp char
+  var n = 0;
+  var outputString = '';
+  for (var i = 0; i < str.length; i++) {
+    var cc = str.charCodeAt(i); 
+    if (cc < 0 || cc > 0xFFFF) {
+      outputString += '!Error in convertCharStr2UTF8: unexpected charCodeAt result, cc=' + cc + '!';
+    }
+    if (highsurrogate != 0) {  
+      if (0xDC00 <= cc && cc <= 0xDFFF) {
+        suppCP = 0x10000 + ((highsurrogate - 0xD800) << 10) + (cc - 0xDC00); 
+        outputString += ' '+dec2hex2(0xF0 | ((suppCP>>18) & 0x07)) + ' ' + dec2hex2(0x80 | ((suppCP>>12) & 0x3F)) + ' ' + dec2hex2(0x80 | ((suppCP>>6) & 0x3F)) + ' ' + dec2hex2(0x80 | (suppCP & 0x3F));
+        highsurrogate = 0;
+        continue;
+      }
+      else {
+        outputString += 'Error in convertCharStr2UTF8: low surrogate expected, cc=' + cc + '!';
+        highsurrogate = 0;
+      }
+    }
+    if (0xD800 <= cc && cc <= 0xDBFF) { // high surrogate
+      highsurrogate = cc;
+    }
+    else {
+      if (cc <= 0x7F) { outputString += ' '+dec2hex2(cc); }
+      else if (cc <= 0x7FF) { outputString += ' '+dec2hex2(0xC0 | ((cc>>6) & 0x1F)) + ' ' + dec2hex2(0x80 | (cc & 0x3F)); } 
+      else if (cc <= 0xFFFF) { outputString += ' '+dec2hex2(0xE0 | ((cc>>12) & 0x0F)) + ' ' + dec2hex2(0x80 | ((cc>>6) & 0x3F)) + ' ' + dec2hex2(0x80 | (cc & 0x3F)); } 
+    }
+  }
+
+  return outputString.substring(1);
+}
+
+function convertCharStr4UTF8esc ( str ) {
+  var str = convertCharStr4UTF8(str);
+
+  return str.split(' ').map(function(m) { 
+    return '\\x' + m.toLowerCase();
+  }).join('');
+}
+
 function displayGlyphData(glyphIndex) {
     var container = document.getElementById('glyph-data');
     var holdtext = document.getElementById('copy-char');
@@ -246,6 +343,11 @@ function displayGlyphData(glyphIndex) {
     if (glyph.unicodes.length > 0) {
         html += '<div><dt>unicode</dt><dd>' + glyph.unicodes.map(formatUnicode).join(', ') + '</dd></div>';
         holdtext.value = String.fromCharCode(parseInt(glyph.unicodes.map(formatUnicode)[0], 16));
+
+      html += '<div><dt>UTF8</td><dd>' + convertCharStr2CP(holdtext.value, 'none', 4, 'unicode') + '</dd></div>';
+      html += '<div><dt>UTF8 hex</td><dd>' + convertCharStr2CP(holdtext.value, 'none', 0, 'zerox') + '</dd></div>';
+      html += '<div><dt>UTF8 units</td><dd>' + convertCharStr4UTF8(holdtext.value) + '</dd></div>';
+      html += '<div><dt>UTF8 uesc</td><dd>' + convertCharStr4UTF8esc(holdtext.value) + '</dd></div>';
     }
 
     html += '<div><dt>index</dt><dd>' + glyph.index + '</dd></div>';
